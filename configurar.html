@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurar - Cantina do Danilson</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container" style="max-width: 600px; margin: 50px auto;">
+        <div class="form-box">
+            <h1>🍔 Configurar Cantina do Danilson</h1>
+            
+            <button onclick="configurarDadosIniciais()" style="width:100%; margin:10px 0; background:#28a745; padding:15px; font-size:16px;">
+                🔧 Carregar Dados Iniciais
+            </button>
+            
+            <button onclick="limparTudo()" style="width:100%; margin:10px 0; background:#dc3545; padding:15px; font-size:16px;">
+                🗑️ Limpar Todos os Dados
+            </button>
+            
+            <button onclick="verDados()" style="width:100%; margin:10px 0; background:#007bff; padding:15px; font-size:16px;">
+                👁️ Ver Dados Salvos
+            </button>
+            
+            <hr style="margin: 20px 0;">
+            
+            <h3>📦 Produtos Exemplo:</h3>
+            <ul style="margin-left: 20px; line-height: 1.8;">
+                <li>🥟 Coxinha - R$ 5,00 (20 unidades)</li>
+                <li>🥤 Refrigerante - R$ 4,00 (30 unidades)</li>
+                <li>🍫 Brigadeiro - R$ 2,00 (50 unidades)</li>
+                <li>🥟 Pastel - R$ 6,00 (15 unidades)</li>
+                <li>🧃 Suco Natural - R$ 5,00 (10 unidades)</li>
+            </ul>
+            
+            <p style="margin-top: 20px; text-align: center;">
+                <a href="index.html" style="color:#667eea; font-size:18px;">➡️ Ir para o Login</a>
+            </p>
+        </div>
+    </div>
+    
+    <div id="mensagem" style="position:fixed; bottom:20px; left:20px; right:20px; background:#333; color:white; padding:15px; border-radius:10px; display:none; text-align:center; z-index:999;">
+    </div>
+
+    <script>
+        function mostrarMensagem(msg, cor) {
+            let div = document.getElementById('mensagem');
+            div.innerHTML = msg;
+            div.style.display = 'block';
+            div.style.background = cor || '#333';
+            setTimeout(() => {
+                div.style.display = 'none';
+            }, 3000);
+        }
+        
+        function configurarDadosIniciais() {
+            // Produtos iniciais
+            let produtos = [
+                { nome: "Coxinha", preco: 5.00, estoque: 20 },
+                { nome: "Refrigerante", preco: 4.00, estoque: 30 },
+                { nome: "Brigadeiro", preco: 2.00, estoque: 50 },
+                { nome: "Pastel", preco: 6.00, estoque: 15 },
+                { nome: "Suco Natural", preco: 5.00, estoque: 10 }
+            ];
+            
+            localStorage.setItem('produtos', JSON.stringify(produtos));
+            
+            // Vendas iniciais (exemplo)
+            let hoje = new Date();
+            let ontem = new Date();
+            ontem.setDate(hoje.getDate() - 1);
+            
+            let vendas = [
+                { data: hoje.toISOString(), produto: "Coxinha", total: 5.00 },
+                { data: hoje.toISOString(), produto: "Refrigerante", total: 4.00 },
+                { data: ontem.toISOString(), produto: "Pastel", total: 6.00 },
+                { data: ontem.toISOString(), produto: "Brigadeiro", total: 2.00 }
+            ];
+            
+            localStorage.setItem('vendas', JSON.stringify(vendas));
+            
+            mostrarMensagem('✅ Dados configurados com sucesso! Faça login com senha: 123', '#28a745');
+            
+            setTimeout(() => {
+                window.location.href = 'index.html';
+            }, 2000);
+        }
+        
+        function limparTudo() {
+            if(confirm('⚠️ TEM CERTEZA? Isso vai apagar TODOS os produtos e vendas cadastrados!')) {
+                localStorage.clear();
+                mostrarMensagem('🗑️ Todos os dados foram apagados!', '#dc3545');
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 2000);
+            }
+        }
+        
+        function verDados() {
+            let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
+            let vendas = JSON.parse(localStorage.getItem('vendas')) || [];
+            
+            let msg = `📦 PRODUTOS: ${produtos.length} cadastrados\n`;
+            msg += `💰 VENDAS: ${vendas.length} registradas\n\n`;
+            msg += `📋 Produtos:\n`;
+            
+            if(produtos.length === 0) {
+                msg += `(nenhum produto cadastrado)\n`;
+            } else {
+                produtos.forEach(p => {
+                    msg += `- ${p.nome}: R$ ${p.preco} (${p.estoque} un)\n`;
+                });
+            }
+            
+            msg += `\n📊 Total em vendas: R$ ${vendas.reduce((sum, v) => sum + v.total, 0).toFixed(2)}`;
+            
+            alert(msg);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Despesas - Admin Cantina</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="admin-container">
+        <div class="sidebar">
+            <h2>🍔 Cantina</h2>
+            <h3>Painel Admin - Danilson</h3>
+            <nav>
+                <a href="dashboard.html">📊 Dashboard</a>
+                <a href="produtos.html">📦 Produtos</a>
+                <a href="categorias.html">🏷️ Categorias</a>
+                <a href="despesas.html">💰 Despesas</a>
+                <a href="relatorios.html">📈 Relatórios</a>
+                <a href="#" onclick="logout()">🚪 Sair</a>
+            </nav>
+        </div>
+        
+        <div class="main-content">
+            <h1>💰 Registrar Despesas</h1>
+            <p>Controle todos os gastos da cantina (aluguel, funcionários, ingredientes, etc).</p>
+            
+            <div class="form-despesa">
+                <h3>➕ Nova Despesa</h3>
+                <form id="formDespesa">
+                    <input type="text" id="descricao" placeholder="Descrição da despesa" required>
+                    <input type="number" step="0.01" id="valor" placeholder="Valor R$" required>
+                    <input type="date" id="data" required>
+                    <select id="categoria">
+                        <option value="Ingredientes">🥩 Ingredientes</option>
+                        <option value="Funcionários">👥 Funcionários</option>
+                        <option value="Aluguel">🏠 Aluguel</option>
+                        <option value="Energia/Água">💡 Energia/Água</option>
+                        <option value="Manutenção">🔧 Manutenção</option>
+                        <option value="Outros">📌 Outros</option>
+                    </select>
+                    <button type="submit">Registrar Despesa</button>
+                </form>
+            </div>
+            
+            <div class="lista-despesas">
+                <h3>📋 Histórico de Despesas</h3>
+                <div class="filtro-despesas">
+                    <button onclick="filtrarDespesas('tudo')">📅 Todas</button>
+                    <button onclick="filtrarDespesas('mes')">📆 Este Mês</button>
+                    <button onclick="filtrarDespesas('semana')">📊 Esta Semana</button>
+                </div>
+                <div id="listaDespesas"></div>
+                <div class="total-despesas" id="totalDespesas"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let filtroAtual = 'tudo';
+        
+        function logout() {
+            localStorage.removeItem('admin_logado');
+            window.location.href = 'index.html';
+        }
+        
+        if(localStorage.getItem('admin_logado') !== 'true') {
+            window.location.href = 'index.html';
+        }
+        
+        document.getElementById('formDespesa').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            let despesas = JSON.parse(localStorage.getItem('despesas')) || [];
+            
+            despesas.push({
+                id: Date.now(),
+                data: document.getElementById('data').value,
+                descricao: document.getElementById('descricao').value,
+                valor: parseFloat(document.getElementById('valor').value),
+                categoria: document.getElementById('categoria').value
+            });
+            
+            localStorage.setItem('despesas', JSON.stringify(despesas));
+            this.reset();
+            carregarDespesas();
+            alert('✅ Despesa registrada!');
+        });
+        
+        function carregarDespesas() {
+            let despesas = JSON.parse(localStorage.getItem('despesas')) || [];
+            let hoje = new Date();
+            let despesasFiltradas = [];
+            
+            if(filtroAtual === 'mes') {
+                let inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+                despesasFiltradas = despesas.filter(d => new Date(d.data) >= inicioMes);
+            } else if(filtroAtual === 'semana') {
+                let inicioSemana = new Date();
+                inicioSemana.setDate(hoje.getDate() - hoje.getDay());
+                despesasFiltradas = despesas.filter(d => new Date(d.data) >= inicioSemana);
+            } else {
+                despesasFiltradas = despesas;
+            }
+            
+            despesasFiltradas.sort((a,b) => new Date(b.data) - new Date(a.data));
+            
+            let div = document.getElementById('listaDespesas');
+            let total = 0;
+            
+            if(despesasFiltradas.length === 0) {
+                div.innerHTML = '<div class="vazio">💰 Nenhuma despesa registrada ainda.</div>';
+                document.getElementById('totalDespesas').innerHTML = '';
+                return;
+            }
+            
+            let html = '<table class="tabela-admin"><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Ação</th></tr></thead><tbody>';
+            
+            despesasFiltradas.forEach(despesa => {
+                total += despesa.valor;
+                html += `<tr>
+                            <td>${new Date(despesa.data).toLocaleDateString('pt-BR')}</td>
+                            <td>${despesa.descricao}</td>
+                            <td>${despesa.categoria}</td>
+                            <td style="color:#dc3545; font-weight:bold;">- R$ ${despesa.valor.toFixed(2)}</td>
+                            <td><button onclick="excluirDespesa(${despesa.id})">🗑️</button></td>
+                          </tr>`;
+            });
+            
+            html += '</tbody></table>';
+            div.innerHTML = html;
+            document.getElementById('totalDespesas').innerHTML = `💰 Total de despesas: R$ ${total.toFixed(2)}`;
+        }
+        
+        function excluirDespesa(id) {
+            if(confirm('Excluir esta despesa?')) {
+                let despesas = JSON.parse(localStorage.getItem('despesas'));
+                despesas = despesas.filter(d => d.id !== id);
+                localStorage.setItem('despesas', JSON.stringify(despesas));
+                carregarDespesas();
+                alert('✅ Despesa excluída!');
+            }
+        }
+        
+        function filtrarDespesas(tipo) {
+            filtroAtual = tipo;
+            carregarDespesas();
+        }
+        
+        carregarDespesas();
+    </script>
+</body>
+</html>

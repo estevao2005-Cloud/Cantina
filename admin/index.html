@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Cantina do Danilson</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-box">
+            <h1>🔒 Painel Administrativo</h1>
+            <h2>Cantina do Danilson</h2>
+            <form id="loginForm">
+                <input type="password" id="senha" placeholder="Senha do Administrador" required>
+                <button type="submit">Entrar no Painel</button>
+            </form>
+            </strong></p>
+            <a href="../index.html" style="color:#667eea;">← Voltar para a loja</a>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const senha = document.getElementById('senha').value;
+            
+            if(senha === 'danilson123') {
+                localStorage.setItem('admin_logado', 'true');
+                window.location.href = 'dashboard.html';
+            } else {
+                alert('Senha incorreta!');
+            }
+        });
+    </script>
+</body>
+</html>

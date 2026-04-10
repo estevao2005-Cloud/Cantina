@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Admin Cantina</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="admin-container">
+        <div class="sidebar">
+            <h2>🍔 Cantina</h2>
+            <h3>Painel Admin - Danilson</h3>
+            <nav>
+                <a href="dashboard.html">📊 Dashboard</a>
+                <a href="produtos.html">📦 Produtos</a>
+                <a href="categorias.html">🏷️ Categorias</a>
+                <a href="despesas.html">💰 Despesas</a>
+                <a href="relatorios.html">📈 Relatórios</a>
+                <a href="#" onclick="logout()">🚪 Sair</a>
+            </nav>
+        </div>
+        
+        <div class="main-content">
+            <h1>Dashboard</h1>
+            <p>Bem-vindo, <strong>Danilson</strong>! Aqui está o resumo da sua cantina.</p>
+            
+            <div class="cards-admin">
+                <div class="card-admin">
+                    <h3>💰 Vendas Hoje</h3>
+                    <p class="valor-grande" id="vendasHoje">R$ 0,00</p>
+                </div>
+                <div class="card-admin">
+                    <h3>📊 Vendas Semana</h3>
+                    <p class="valor-grande" id="vendasSemana">R$ 0,00</p>
+                </div>
+                <div class="card-admin">
+                    <h3>📅 Vendas Mês</h3>
+                    <p class="valor-grande" id="vendasMes">R$ 0,00</p>
+                </div>
+            </div>
+            
+            <div class="cards-admin">
+                <div class="card-admin despesa">
+                    <h3>💸 Despesas Mês</h3>
+                    <p class="valor-grande" id="despesasMes">R$ 0,00</p>
+                </div>
+                <div class="card-admin lucro">
+                    <h3>💰 Lucro Mês</h3>
+                    <p class="valor-grande" id="lucroMes">R$ 0,00</p>
+                </div>
+                <div class="card-admin">
+                    <h3>📦 Total Produtos</h3>
+                    <p class="valor-grande" id="totalProdutos">0</p>
+                </div>
+            </div>
+            
+            <div class="alertas">
+                <h3>⚠️ Produtos com Estoque Baixo (≤ 5)</h3>
+                <div id="alertasEstoque"></div>
+            </div>
+            
+            <div class="ultimas-vendas" style="margin-top: 30px;">
+                <h3>📋 Últimas Vendas (últimas 10)</h3>
+                <div id="ultimasVendas"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function logout() {
+            localStorage.removeItem('admin_logado');
+            window.location.href = 'index.html';
+        }
+        
+        if(localStorage.getItem('admin_logado') !== 'true') {
+            window.location.href = 'index.html';
+        }
+        
+        function calcularVendas() {
+            let vendas = JSON.parse(localStorage.getItem('vendas')) || [];
+            let hoje = new Date();
+            let inicioSemana = new Date();
+            inicioSemana.setDate(hoje.getDate() - hoje.getDay());
+            let inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+            
+            let vendasHoje = 0, vendasSemana = 0, vendasMes = 0;
+            
+            vendas.forEach(venda => {
+                let dataVenda = new Date(venda.data);
+                if(dataVenda.toDateString() === hoje.toDateString()) vendasHoje += venda.total;
+                if(dataVenda >= inicioSemana) vendasSemana += venda.total;
+                if(dataVenda >= inicioMes) vendasMes += venda.total;
+            });
+            
+            document.getElementById('vendasHoje').innerHTML = `R$ ${vendasHoje.toFixed(2)}`;
+            document.getElementById('vendasSemana').innerHTML = `R$ ${vendasSemana.toFixed(2)}`;
+            document.getElementById('vendasMes').innerHTML = `R$ ${vendasMes.toFixed(2)}`;
+            return vendasMes;
+        }
+        
+        function calcularDespesas() {
+            let despesas = JSON.parse(localStorage.getItem('despesas')) || [];
+            let hoje = new Date();
+            let inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+            
+            let despesasMes = despesas.filter(d => new Date(d.data) >= inicioMes).reduce((sum, d) => sum + d.valor, 0);
+            document.getElementById('despesasMes').innerHTML = `R$ ${despesasMes.toFixed(2)}`;
+            return despesasMes;
+        }
+        
+        function calcularLucro() {
+            let vendasMes = parseFloat(document.getElementById('vendasMes').innerHTML.replace('R$ ', '').replace(',', '.'));
+            let despesasMes = parseFloat(document.getElementById('despesasMes').innerHTML.replace('R$ ', '').replace(',', '.'));
+            let lucro = vendasMes - despesasMes;
+            document.getElementById('lucroMes').innerHTML = `R$ ${lucro.toFixed(2)}`;
+            document.getElementById('lucroMes').style.color = lucro >= 0 ? '#28a745' : '#dc3545';
+        }
+        
+        function carregarProdutos() {
+            let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
+            document.getElementById('totalProdutos').innerHTML = produtos.length;
+            
+            let baixos = produtos.filter(p => p.estoque <= 5);
+            let alertaDiv = document.getElementById('alertasEstoque');
+            
+            if(produtos.length === 0) {
+                alertaDiv.innerHTML = '<p>📦 Nenhum produto cadastrado ainda. Vá em "Produtos" para adicionar.</p>';
+            } else if(baixos.length === 0) {
+                alertaDiv.innerHTML = '<p>✅ Todos os produtos com estoque OK!</p>';
+            } else {
+                let html = '<ul>';
+                baixos.forEach(p => {
+                    html += `<li>⚠️ ${p.nome} - Estoque: ${p.estoque} unidades</li>`;
+                });
+                html += '</ul>';
+                alertaDiv.innerHTML = html;
+            }
+        }
+        
+        function carregarUltimasVendas() {
+            let vendas = JSON.parse(localStorage.getItem('vendas')) || [];
+            let ultimasVendas = vendas.slice(-10).reverse();
+            let div = document.getElementById('ultimasVendas');
+            
+            if(ultimasVendas.length === 0) {
+                div.innerHTML = '<div class="vazio">📭 Nenhuma venda registrada ainda</div>';
+                return;
+            }
+            
+            let html = '<table class="tabela-admin"><thead><tr><th>Data</th><th>Itens</th><th>Total</th><th>Ação</th></tr></thead><tbody>';
+            
+            ultimasVendas.forEach(venda => {
+                let itensTexto = venda.itens.map(i => i.nome).join(', ');
+                html += `<tr>
+                            <td>${new Date(venda.data).toLocaleDateString('pt-BR')} ${new Date(venda.data).toLocaleTimeString()}</td>
+                            <td>${itensTexto}</td>
+                            <td style="color:#28a745; font-weight:bold;">R$ ${venda.total.toFixed(2)}</td>
+                            <td><button class="btn-excluir" onclick="excluirVenda(${venda.id})">🗑️ Excluir</button></td>
+                          </tr>`;
+            });
+            
+            html += '</tbody></table>';
+            div.innerHTML = html;
+        }
+        
+        function excluirVenda(id) {
+            if(confirm('⚠️ Tem certeza que deseja EXCLUIR esta venda? Esta ação não pode ser desfeita!')) {
+                let vendas = JSON.parse(localStorage.getItem('vendas')) || [];
+                let vendaExcluida = vendas.find(v => v.id === id);
+                
+                if(vendaExcluida) {
+                    // Restaurar o estoque dos produtos vendidos
+                    let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
+                    vendaExcluida.itens.forEach(item => {
+                        let produto = produtos.find(p => p.nome === item.nome);
+                        if(produto) {
+                            produto.estoque += 1;
+                        }
+                    });
+                    localStorage.setItem('produtos', JSON.stringify(produtos));
+                    
+                    // Remover a venda
+                    vendas = vendas.filter(v => v.id !== id);
+                    localStorage.setItem('vendas', JSON.stringify(vendas));
+                    
+                    alert('✅ Venda excluída e estoque restaurado!');
+                    
+                    // Recarregar todos os dados
+                    calcularVendas();
+                    calcularLucro();
+                    carregarProdutos();
+                    carregarUltimasVendas();
+                }
+            }
+        }
+        
+        calcularVendas();
+        calcularDespesas();
+        calcularLucro();
+        carregarProdutos();
+        carregarUltimasVendas();
+    </script>
+</body>
+</html>

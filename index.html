@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cantina do Danilson - Vendas</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="tela-venda">
+        <div class="header-loja">
+            <h1>🍔 Cantina do Danilson</h1>
+            <p>Sistema de Vendas</p>
+        </div>
+
+        <div class="info-dia">
+            <div class="data-atual" id="dataAtual"></div>
+            <div class="vendas-dia">Vendas hoje: <strong id="vendasHojeValor">R$ 0,00</strong></div>
+        </div>
+
+        <!-- Filtro por categoria -->
+        <div class="filtro-categoria" id="filtroCategoria"></div>
+
+        <!-- Produtos -->
+        <div class="produtos-grid" id="produtosGrid">
+            <p class="sem-produtos">⚠️ Nenhum produto cadastrado. Aguarde o dono adicionar os produtos no painel admin.</p>
+        </div>
+
+        <!-- Carrinho -->
+        <div class="carrinho-area">
+            <h3>🛒 Carrinho de Compras</h3>
+            <div id="carrinhoLista"></div>
+            <div class="total-venda" id="totalVenda">Total: R$ 0,00</div>
+            <button class="btn-limpar" onclick="limparCarrinho()">🗑️ Limpar Carrinho</button>
+            <button class="btn-finalizar" onclick="finalizarVenda()">✅ Finalizar Venda</button>
+        </div>
+    </div>
+
+    <a href="admin/index.html" class="admin-link">🔒 Painel Admin</a>
+
+    <script>
+        let carrinho = [];
+        let categoriaFiltro = 'todas';
+
+        function atualizarData() {
+            let data = new Date();
+            document.getElementById('dataAtual').innerHTML = data.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        }
+
+        function atualizarVendasHoje() {
+            let vendas = JSON.parse(localStorage.getItem('vendas')) || [];
+            let hoje = new Date().toDateString();
+            let vendasHoje = vendas.filter(v => new Date(v.data).toDateString() === hoje);
+            let totalHoje = vendasHoje.reduce((sum, v) => sum + v.total, 0);
+            document.getElementById('vendasHojeValor').innerHTML = `R$ ${totalHoje.toFixed(2)}`;
+        }
+
+        function carregarCategorias() {
+            let categorias = JSON.parse(localStorage.getItem('categorias')) || [];
+            let filtroDiv = document.getElementById('filtroCategoria');
+            
+            if(categorias.length === 0) {
+                filtroDiv.innerHTML = '';
+                return;
+            }
+            
+            let html = '<button class="btn-categoria" onclick="filtrarPorCategoria(\'todas\')">📦 Todas</button>';
+            categorias.forEach(cat => {
+                html += `<button class="btn-categoria" onclick="filtrarPorCategoria('${cat.nome}')">${cat.nome}</button>`;
+            });
+            filtroDiv.innerHTML = html;
+        }
+
+        function filtrarPorCategoria(categoria) {
+            categoriaFiltro = categoria;
+            carregarProdutos();
+            
+            let botoes = document.querySelectorAll('.btn-categoria');
+            botoes.forEach(btn => {
+                btn.style.background = '#e0e0e0';
+                btn.style.color = '#333';
+            });
+            
+            // Encontrar o botão clicado
+            for(let i = 0; i < botoes.length; i++) {
+                if(botoes[i].innerText.includes(categoria)) {
+                    botoes[i].style.background = '#667eea';
+                    botoes[i].style.color = 'white';
+                    break;
+                }
+            }
+        }
+
+        function carregarProdutos() {
+            let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
+            let grid = document.getElementById('produtosGrid');
+            
+            if(produtos.length === 0) {
+                grid.innerHTML = '<p class="sem-produtos">⚠️ Nenhum produto cadastrado. Aguarde o dono adicionar os produtos no painel admin.</p>';
+                return;
+            }
+            
+            let produtosFiltrados = produtos;
+            if(categoriaFiltro !== 'todas') {
+                produtosFiltrados = produtos.filter(p => p.categoria === categoriaFiltro);
+            }
+            
+            if(produtosFiltrados.length === 0) {
+                grid.innerHTML = '<p class="sem-produtos">⚠️ Nenhum produto nesta categoria.</p>';
+                return;
+            }
+            
+            grid.innerHTML = '';
+            for(let i = 0; i < produtosFiltrados.length; i++) {
+                let produto = produtosFiltrados[i];
+                let produtoOriginalIndex = produtos.findIndex(p => p.id === produto.id);
+                if(produto.estoque > 0) {
+                    let card = document.createElement('div');
+                    card.className = 'produto-card';
+                    card.onclick = (function(idx) { 
+                        return function() { adicionarAoCarrinho(idx); };
+                    })(produtoOriginalIndex);
+                    card.innerHTML = `
+                        <div class="produto-nome">${produto.nome}</div>
+                        <div class="produto-preco">R$ ${produto.preco.toFixed(2)}</div>
+                        <div class="produto-estoque">📦 Estoque: ${produto.estoque}</div>
+                        <div class="produto-categoria">🏷️ ${produto.categoria || 'Geral'}</div>
+                    `;
+                    grid.appendChild(card);
+                }
+            }
+        }
+
+        function adicionarAoCarrinho(index) {
+            let produtos = JSON.parse(localStorage.getItem('produtos'));
+            let produto = produtos[index];
+            
+            if(produto.estoque <= 0) {
+                alert('⚠️ Produto sem estoque!');
+                return;
+            }
+            
+            carrinho.push({
+                id: index,
+                nome: produto.nome,
+                preco: produto.preco,
+                produtoId: produto.id
+            });
+            
+            atualizarCarrinho();
+        }
+
+        function atualizarCarrinho() {
+            let lista = document.getElementById('carrinhoLista');
+            let total = 0;
+            
+            if(carrinho.length === 0) {
+                lista.innerHTML = '<p class="carrinho-vazio">🛒 Carrinho vazio</p>';
+                document.getElementById('totalVenda').innerHTML = 'Total: R$ 0,00';
+                return;
+            }
+            
+            lista.innerHTML = '';
+            for(let i = 0; i < carrinho.length; i++) {
+                let item = carrinho[i];
+                total += item.preco;
+                let div = document.createElement('div');
+                div.className = 'carrinho-item';
+                div.innerHTML = `
+                    <span><strong>${item.nome}</strong> - R$ ${item.preco.toFixed(2)}</span>
+                    <button class="btn-remover" onclick="removerDoCarrinho(${i})">❌</button>
+                `;
+                lista.appendChild(div);
+            }
+            
+            document.getElementById('totalVenda').innerHTML = `Total: R$ ${total.toFixed(2)}`;
+        }
+
+        function removerDoCarrinho(index) {
+            carrinho.splice(index, 1);
+            atualizarCarrinho();
+        }
+
+        function limparCarrinho() {
+            if(carrinho.length > 0 && confirm('Limpar carrinho?')) {
+                carrinho = [];
+                atualizarCarrinho();
+            }
+        }
+
+        function finalizarVenda() {
+            if(carrinho.length === 0) {
+                alert('⚠️ Carrinho vazio! Adicione produtos.');
+                return;
+            }
+            
+            let produtos = JSON.parse(localStorage.getItem('produtos'));
+            let vendas = JSON.parse(localStorage.getItem('vendas')) || [];
+            let total = 0;
+            
+            for(let i = 0; i < carrinho.length; i++) {
+                total += carrinho[i].preco;
+            }
+            
+            let vendaRegistro = {
+                id: Date.now(),
+                data: new Date().toISOString(),
+                itens: [],
+                total: total
+            };
+            
+            for(let i = 0; i < carrinho.length; i++) {
+                let item = carrinho[i];
+                vendaRegistro.itens.push({ nome: item.nome, preco: item.preco });
+                produtos[item.id].estoque -= 1;
+            }
+            
+            vendas.push(vendaRegistro);
+            
+            localStorage.setItem('produtos', JSON.stringify(produtos));
+            localStorage.setItem('vendas', JSON.stringify(vendas));
+            
+            alert(`✅ Venda finalizada!\n💰 Total: R$ ${total.toFixed(2)}`);
+            
+            carrinho = [];
+            atualizarCarrinho();
+            carregarProdutos();
+            atualizarVendasHoje();
+        }
+        
+        atualizarData();
+        atualizarVendasHoje();
+        carregarCategorias();
+        carregarProdutos();
+        
+        setInterval(atualizarVendasHoje, 5000);
+    </script>
+</body>
+</html>
