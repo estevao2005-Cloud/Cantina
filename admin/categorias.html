@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Relatórios - Admin Cantina</title>
+    <title>Categorias - Admin Cantina</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </head>
 <body>
     <div class="admin-container">
@@ -22,46 +24,32 @@
         </div>
         
         <div class="main-content">
-            <h1>📈 Relatórios Completos</h1>
-            <p>Veja quanto entrou, quanto saiu e o lucro real da cantina.</p>
+            <h1>🏷️ Gerenciar Categorias</h1>
+            <p>Crie categorias para organizar seus produtos (Ex: Salgados, Bebidas, Doces, etc).</p>
             
-            <div class="filtros-relatorio">
-                <button onclick="gerarRelatorio('semana')">📆 Esta Semana</button>
-                <button onclick="gerarRelatorio('mes')">📅 Este Mês</button>
-                <button onclick="gerarRelatorio('ano')">📊 Este Ano</button>
-                <button onclick="gerarRelatorio('tudo')">🎯 Todo Histórico</button>
+            <div class="form-categoria">
+                <h3>➕ Nova Categoria</h3>
+                <form id="formCategoria">
+                    <input type="text" id="nomeCategoria" placeholder="Ex: Salgados, Bebidas, Doces..." required>
+                    <button type="submit">Adicionar Categoria</button>
+                </form>
             </div>
             
-            <div class="resumo-financeiro">
-                <div class="card-resumo">
-                    <h3>💰 Total de Vendas</h3>
-                    <p class="valor" id="totalVendas">R$ 0,00</p>
-                </div>
-                <div class="card-resumo">
-                    <h3>💸 Total de Despesas</h3>
-                    <p class="valor" id="totalDespesas">R$ 0,00</p>
-                </div>
-                <div class="card-resumo">
-                    <h3>📈 Lucro Real</h3>
-                    <p class="valor" id="lucroTotal">R$ 0,00</p>
-                </div>
+            <div class="lista-categorias">
+                <h3>📋 Categorias Cadastradas</h3>
+                <div id="listaCategorias"></div>
             </div>
             
-            <div class="detalhes-vendas">
-                <h3>📋 Vendas do Período</h3>
-                <div id="listaVendas"></div>
-            </div>
-            
-            <div class="detalhes-despesas" style="margin-top: 30px;">
-                <h3>💸 Despesas do Período</h3>
-                <div id="listaDespesas"></div>
+            <div class="dica">
+                <p style="margin-top:20px; padding:15px; background:#e8f4f8; border-radius:8px;">
+                    💡 <strong>Dica:</strong> Crie primeiro as categorias, depois vá em "Produtos" para adicionar os itens.
+                </p>
             </div>
         </div>
     </div>
 
+    <script src="../firebase-config.js"></script>
     <script>
-        let periodoAtual = 'semana';
-        
         function logout() {
             localStorage.removeItem('admin_logado');
             window.location.href = 'index.html';
@@ -71,121 +59,163 @@
             window.location.href = 'index.html';
         }
         
-        function gerarRelatorio(periodo) {
-            periodoAtual = periodo;
-            let vendas = JSON.parse(localStorage.getItem('vendas')) || [];
-            let despesas = JSON.parse(localStorage.getItem('despesas')) || [];
-            let hoje = new Date();
-            let dataInicio;
+        function carregarListaCategorias() {
+            let categorias = JSON.parse(localStorage.getItem('categorias')) || [];
+            let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
+            let div = document.getElementById('listaCategorias');
             
-            if(periodo === 'semana') {
-                dataInicio = new Date();
-                dataInicio.setDate(hoje.getDate() - 7);
-            } else if(periodo === 'mes') {
-                dataInicio = new Date();
-                dataInicio.setMonth(hoje.getMonth() - 1);
-            } else if(periodo === 'ano') {
-                dataInicio = new Date();
-                dataInicio.setFullYear(hoje.getFullYear() - 1);
-            } else {
-                dataInicio = new Date(2020, 0, 1);
+            if(categorias.length === 0) {
+                div.innerHTML = '<div class="vazio">🏷️ Nenhuma categoria cadastrada. Adicione sua primeira categoria acima!</div>';
+                return;
             }
             
-            let vendasFiltradas = vendas.filter(v => new Date(v.data) >= dataInicio);
-            let despesasFiltradas = despesas.filter(d => new Date(d.data) >= dataInicio);
+            let html = '<table class="tabela-admin"><thead><tr><th>Categoria</th><th>Quantidade de Produtos</th><th>Ações</th></tr></thead><tbody>';
             
-            let totalVendas = vendasFiltradas.reduce((sum, v) => sum + v.total, 0);
-            let totalDespesas = despesasFiltradas.reduce((sum, d) => sum + d.valor, 0);
-            let lucro = totalVendas - totalDespesas;
-            
-            document.getElementById('totalVendas').innerHTML = `R$ ${totalVendas.toFixed(2)}`;
-            document.getElementById('totalDespesas').innerHTML = `R$ ${totalDespesas.toFixed(2)}`;
-            document.getElementById('lucroTotal').innerHTML = `R$ ${lucro.toFixed(2)}`;
-            document.getElementById('lucroTotal').style.color = lucro >= 0 ? '#28a745' : '#dc3545';
-            
-            // Vendas com opção de excluir
-            let vendasDiv = document.getElementById('listaVendas');
-            if(vendasFiltradas.length === 0) {
-                vendasDiv.innerHTML = '<div class="vazio">📭 Nenhuma venda neste período</div>';
-            } else {
-                let html = '<table class="tabela-admin"><thead><tr><th>Data</th><th>Itens Vendidos</th><th>Total</th><th>Ações</th></tr></thead><tbody>';
-                vendasFiltradas.sort((a,b) => new Date(b.data) - new Date(a.data)).forEach(venda => {
-                    let itensTexto = venda.itens.map(i => i.nome).join(', ');
-                    html += `<tr>
-                                <td>${new Date(venda.data).toLocaleDateString('pt-BR')} ${new Date(venda.data).toLocaleTimeString()}</td>
-                                <td>${itensTexto}</td>
-                                <td style="color:#28a745; font-weight:bold;">R$ ${venda.total.toFixed(2)}</td>
-                                <td><button class="btn-excluir" onclick="excluirVenda(${venda.id})">🗑️ Excluir</button></td>
-                              </tr>`;
-                });
-                html += '</tbody></table>';
-                vendasDiv.innerHTML = html;
-            }
-            
-            // Despesas com opção de excluir
-            let despesasDiv = document.getElementById('listaDespesas');
-            if(despesasFiltradas.length === 0) {
-                despesasDiv.innerHTML = '<div class="vazio">📭 Nenhuma despesa neste período</div>';
-            } else {
-                let html = '<table class="tabela-admin"><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Ações</th></tr></thead><tbody>';
-                despesasFiltradas.sort((a,b) => new Date(b.data) - new Date(a.data)).forEach(despesa => {
-                    html += `<tr>
-                                <td>${new Date(despesa.data).toLocaleDateString('pt-BR')}</td>
-                                <td>${despesa.descricao}</td>
-                                <td>${despesa.categoria}</td>
-                                <td style="color:#dc3545; font-weight:bold;">- R$ ${despesa.valor.toFixed(2)}</td>
-                                <td><button class="btn-excluir" onclick="excluirDespesa(${despesa.id})">🗑️ Excluir</button></td>
-                              </tr>`;
-                });
-                html += '</tbody></table>';
-                despesasDiv.innerHTML = html;
-            }
-        }
-        
-        function excluirVenda(id) {
-            if(confirm('⚠️ Tem certeza que deseja EXCLUIR esta venda? Esta ação não pode ser desfeita!')) {
-                let vendas = JSON.parse(localStorage.getItem('vendas')) || [];
-                let vendaExcluida = vendas.find(v => v.id === id);
-                
-                if(vendaExcluida) {
-                    // Restaurar o estoque dos produtos vendidos
-                    let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
-                    vendaExcluida.itens.forEach(item => {
-                        // Encontrar o produto pelo nome e devolver ao estoque
-                        let produto = produtos.find(p => p.nome === item.nome);
-                        if(produto) {
-                            produto.estoque += 1;
-                        }
-                    });
-                    localStorage.setItem('produtos', JSON.stringify(produtos));
-                    
-                    // Remover a venda
-                    vendas = vendas.filter(v => v.id !== id);
-                    localStorage.setItem('vendas', JSON.stringify(vendas));
-                    
-                    alert('✅ Venda excluída e estoque restaurado!');
-                    gerarRelatorio(periodoAtual);
-                    
-                    // Atualizar dashboard se estiver aberto (opcional)
-                    if(window.opener) {
-                        window.opener.location.reload();
+            for(let i = 0; i < categorias.length; i++) {
+                let categoria = categorias[i];
+                let qtdProdutos = 0;
+                for(let j = 0; j < produtos.length; j++) {
+                    if(produtos[j].categoria === categoria.nome) {
+                        qtdProdutos++;
                     }
                 }
+                html += `<tr>
+                            <td>🏷️ <strong>${categoria.nome}</strong></td>
+                            <td>${qtdProdutos} produtos</td>
+                            <td>
+                                <button onclick="editarCategoria(${i})">✏️ Editar</button>
+                                <button onclick="excluirCategoria(${i})">🗑️ Excluir</button>
+                            </td>
+                          </tr>`;
+            }
+            
+            html += '</tbody></table>';
+            div.innerHTML = html;
+        }
+        
+        document.getElementById('formCategoria').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            let categorias = JSON.parse(localStorage.getItem('categorias')) || [];
+            let novaCategoria = document.getElementById('nomeCategoria').value.trim();
+            
+            if(novaCategoria === '') {
+                alert('Digite o nome da categoria!');
+                return;
+            }
+            
+            let existe = false;
+            for(let i = 0; i < categorias.length; i++) {
+                if(categorias[i].nome.toLowerCase() === novaCategoria.toLowerCase()) {
+                    existe = true;
+                    break;
+                }
+            }
+            
+            if(existe) {
+                alert('⚠️ Esta categoria já existe!');
+                return;
+            }
+            
+            let novaCat = { id: Date.now(), nome: novaCategoria };
+            
+            if(typeof adicionarCategoriaFirebase === 'function') {
+                adicionarCategoriaFirebase(novaCat);
+                alert('✅ Categoria adicionada com sucesso!');
+            } else {
+                categorias.push(novaCat);
+                localStorage.setItem('categorias', JSON.stringify(categorias));
+                alert('✅ Categoria adicionada com sucesso! (modo offline)');
+            }
+            
+            document.getElementById('formCategoria').reset();
+            carregarListaCategorias();
+        });
+        
+        function excluirCategoria(index) {
+            let categorias = JSON.parse(localStorage.getItem('categorias')) || [];
+            let categoriaNome = categorias[index].nome;
+            let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
+            
+            let produtosNaCategoria = 0;
+            for(let i = 0; i < produtos.length; i++) {
+                if(produtos[i].categoria === categoriaNome) {
+                    produtosNaCategoria++;
+                }
+            }
+            
+            if(produtosNaCategoria > 0) {
+                alert(`⚠️ Não é possível excluir "${categoriaNome}" pois existem ${produtosNaCategoria} produtos nela.`);
+                return;
+            }
+            
+            if(confirm(`Excluir categoria "${categoriaNome}"?`)) {
+                let novasCategorias = [];
+                for(let i = 0; i < categorias.length; i++) {
+                    if(i !== index) {
+                        novasCategorias.push(categorias[i]);
+                    }
+                }
+                
+                if(typeof salvarCategoriasFirebase === 'function') {
+                    salvarCategoriasFirebase(novasCategorias);
+                    alert('✅ Categoria excluída com sucesso!');
+                } else {
+                    localStorage.setItem('categorias', JSON.stringify(novasCategorias));
+                    alert('✅ Categoria excluída com sucesso! (modo offline)');
+                }
+                carregarListaCategorias();
             }
         }
         
-        function excluirDespesa(id) {
-            if(confirm('⚠️ Tem certeza que deseja EXCLUIR esta despesa?')) {
-                let despesas = JSON.parse(localStorage.getItem('despesas')) || [];
-                despesas = despesas.filter(d => d.id !== id);
-                localStorage.setItem('despesas', JSON.stringify(despesas));
-                alert('✅ Despesa excluída!');
-                gerarRelatorio(periodoAtual);
+        function editarCategoria(index) {
+            let categorias = JSON.parse(localStorage.getItem('categorias')) || [];
+            let nomeAntigo = categorias[index].nome;
+            let novoNome = prompt('✏️ Editar categoria:', nomeAntigo);
+            
+            if(novoNome && novoNome.trim() !== '' && novoNome !== nomeAntigo) {
+                let existe = false;
+                for(let i = 0; i < categorias.length; i++) {
+                    if(categorias[i].nome.toLowerCase() === novoNome.toLowerCase()) {
+                        existe = true;
+                        break;
+                    }
+                }
+                
+                if(existe) {
+                    alert('⚠️ Já existe uma categoria com este nome!');
+                    return;
+                }
+                
+                categorias[index].nome = novoNome;
+                
+                if(typeof salvarCategoriasFirebase === 'function') {
+                    salvarCategoriasFirebase(categorias);
+                } else {
+                    localStorage.setItem('categorias', JSON.stringify(categorias));
+                }
+                
+                // Atualizar produtos com essa categoria
+                let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
+                for(let i = 0; i < produtos.length; i++) {
+                    if(produtos[i].categoria === nomeAntigo) {
+                        produtos[i].categoria = novoNome;
+                    }
+                }
+                
+                if(typeof salvarProdutosFirebase === 'function') {
+                    salvarProdutosFirebase(produtos);
+                } else {
+                    localStorage.setItem('produtos', JSON.stringify(produtos));
+                }
+                
+                carregarListaCategorias();
+                alert('✅ Categoria atualizada com sucesso!');
             }
         }
         
-        // Inicializar
-        gerarRelatorio('semana');
+        carregarListaCategorias();
+        setInterval(carregarListaCategorias, 2000);
     </script>
 </body>
 </html>

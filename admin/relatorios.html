@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Relatórios - Admin Cantina</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </head>
 <body>
     <div class="admin-container">
@@ -23,7 +25,7 @@
         
         <div class="main-content">
             <h1>📈 Relatórios Completos</h1>
-            <p>Veja quanto entrou, quanto saiu e o lucro real da cantina.</p>
+            <p>⚠️ <strong>Atenção:</strong> Os totais semanais e mensais só são exibidos completamente quando o período termina.</p>
             
             <div class="filtros-relatorio">
                 <button onclick="gerarRelatorio('semana')">📆 Esta Semana</button>
@@ -31,6 +33,8 @@
                 <button onclick="gerarRelatorio('ano')">📊 Este Ano</button>
                 <button onclick="gerarRelatorio('tudo')">🎯 Todo Histórico</button>
             </div>
+            
+            <div class="aviso-periodo" id="avisoPeriodo" style="margin-bottom: 20px; padding: 10px; border-radius: 8px;"></div>
             
             <div class="resumo-financeiro">
                 <div class="card-resumo">
@@ -59,7 +63,10 @@
         </div>
     </div>
 
+    <script src="../firebase-config.js"></script>
     <script>
+        let periodoAtual = 'semana';
+        
         function logout() {
             localStorage.removeItem('admin_logado');
             window.location.href = 'index.html';
@@ -69,30 +76,89 @@
             window.location.href = 'index.html';
         }
         
+        function isPeriodoCompleto(periodo) {
+            let hoje = new Date();
+            if(periodo === 'semana') {
+                return hoje.getDay() === 0;
+            } else if(periodo === 'mes') {
+                let amanha = new Date(hoje);
+                amanha.setDate(hoje.getDate() + 1);
+                return amanha.getMonth() !== hoje.getMonth();
+            }
+            return true;
+        }
+        
         function gerarRelatorio(periodo) {
+            periodoAtual = periodo;
             let vendas = JSON.parse(localStorage.getItem('vendas')) || [];
             let despesas = JSON.parse(localStorage.getItem('despesas')) || [];
             let hoje = new Date();
             let dataInicio;
+            let periodoCompleto = isPeriodoCompleto(periodo);
+            
+            let avisoDiv = document.getElementById('avisoPeriodo');
             
             if(periodo === 'semana') {
                 dataInicio = new Date();
-                dataInicio.setDate(hoje.getDate() - 7);
+                dataInicio.setDate(hoje.getDate() - hoje.getDay());
+                if(periodoCompleto) {
+                    avisoDiv.innerHTML = '✅ <strong>Semana finalizada!</strong> Mostrando total completo da semana.';
+                    avisoDiv.style.background = '#d4edda';
+                    avisoDiv.style.color = '#155724';
+                } else {
+                    let diasFaltam = 7 - hoje.getDay();
+                    avisoDiv.innerHTML = `⚠️ <strong>Semana ainda não terminou!</strong> Faltam ${diasFaltam} dias. Os valores mostrados são parciais.`;
+                    avisoDiv.style.background = '#fff3cd';
+                    avisoDiv.style.color = '#856404';
+                }
             } else if(periodo === 'mes') {
-                dataInicio = new Date();
-                dataInicio.setMonth(hoje.getMonth() - 1);
+                dataInicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+                if(periodoCompleto) {
+                    avisoDiv.innerHTML = '✅ <strong>Mês finalizado!</strong> Mostrando total completo do mês.';
+                    avisoDiv.style.background = '#d4edda';
+                    avisoDiv.style.color = '#155724';
+                } else {
+                    let diasFaltam = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate() - hoje.getDate();
+                    avisoDiv.innerHTML = `⚠️ <strong>Mês ainda não terminou!</strong> Faltam ${diasFaltam} dias. Os valores mostrados são parciais.`;
+                    avisoDiv.style.background = '#fff3cd';
+                    avisoDiv.style.color = '#856404';
+                }
             } else if(periodo === 'ano') {
-                dataInicio = new Date();
-                dataInicio.setFullYear(hoje.getFullYear() - 1);
+                dataInicio = new Date(hoje.getFullYear(), 0, 1);
+                avisoDiv.innerHTML = '📊 <strong>Relatório anual</strong> - Mostrando todas as vendas do ano.';
+                avisoDiv.style.background = '#d1ecf1';
+                avisoDiv.style.color = '#0c5460';
             } else {
                 dataInicio = new Date(2020, 0, 1);
+                avisoDiv.innerHTML = '🎯 <strong>Histórico completo</strong> - Mostrando todas as vendas desde o início.';
+                avisoDiv.style.background = '#d1ecf1';
+                avisoDiv.style.color = '#0c5460';
             }
             
-            let vendasFiltradas = vendas.filter(v => new Date(v.data) >= dataInicio);
-            let despesasFiltradas = despesas.filter(d => new Date(d.data) >= dataInicio);
+            let vendasFiltradas = [];
+            for(let i = 0; i < vendas.length; i++) {
+                if(new Date(vendas[i].data) >= dataInicio) {
+                    vendasFiltradas.push(vendas[i]);
+                }
+            }
             
-            let totalVendas = vendasFiltradas.reduce((sum, v) => sum + v.total, 0);
-            let totalDespesas = despesasFiltradas.reduce((sum, d) => sum + d.valor, 0);
+            let despesasFiltradas = [];
+            for(let i = 0; i < despesas.length; i++) {
+                if(new Date(despesas[i].data) >= dataInicio) {
+                    despesasFiltradas.push(despesas[i]);
+                }
+            }
+            
+            let totalVendas = 0;
+            for(let i = 0; i < vendasFiltradas.length; i++) {
+                totalVendas += vendasFiltradas[i].total;
+            }
+            
+            let totalDespesas = 0;
+            for(let i = 0; i < despesasFiltradas.length; i++) {
+                totalDespesas += despesasFiltradas[i].valor;
+            }
+            
             let lucro = totalVendas - totalDespesas;
             
             document.getElementById('totalVendas').innerHTML = `R$ ${totalVendas.toFixed(2)}`;
@@ -105,15 +171,23 @@
             if(vendasFiltradas.length === 0) {
                 vendasDiv.innerHTML = '<div class="vazio">📭 Nenhuma venda neste período</div>';
             } else {
-                let html = '<table class="tabela-admin"><thead><tr><th>Data</th><th>Itens Vendidos</th><th>Total</th></tr></thead><tbody>';
-                vendasFiltradas.sort((a,b) => new Date(b.data) - new Date(a.data)).forEach(venda => {
-                    let itensTexto = venda.itens.map(i => i.nome).join(', ');
+                let html = '<table class="tabela-admin"><thead><tr><th>Data</th><th>Itens Vendidos</th><th>Total</th><th>Ações</th></tr></thead><tbody>';
+                
+                vendasFiltradas.sort((a,b) => new Date(b.data) - new Date(a.data));
+                for(let i = 0; i < vendasFiltradas.length; i++) {
+                    let venda = vendasFiltradas[i];
+                    let itensTexto = '';
+                    for(let j = 0; j < venda.itens.length; j++) {
+                        if(j > 0) itensTexto += ', ';
+                        itensTexto += venda.itens[j].nome;
+                    }
                     html += `<tr>
                                 <td>${new Date(venda.data).toLocaleDateString('pt-BR')} ${new Date(venda.data).toLocaleTimeString()}</td>
                                 <td>${itensTexto}</td>
                                 <td style="color:#28a745; font-weight:bold;">R$ ${venda.total.toFixed(2)}</td>
+                                <td><button class="btn-excluir" onclick="excluirVenda(${venda.id})">🗑️ Excluir</button></td>
                               </tr>`;
-                });
+                }
                 html += '</tbody></table>';
                 vendasDiv.innerHTML = html;
             }
@@ -123,19 +197,63 @@
             if(despesasFiltradas.length === 0) {
                 despesasDiv.innerHTML = '<div class="vazio">📭 Nenhuma despesa neste período</div>';
             } else {
-                let html = '<table class="tabela-admin"><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th></tr></thead><tbody>';
-                despesasFiltradas.sort((a,b) => new Date(b.data) - new Date(a.data)).forEach(despesa => {
+                let html = '<table class="tabela-admin"><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Ações</th></tr></thead><tbody>';
+                
+                despesasFiltradas.sort((a,b) => new Date(b.data) - new Date(a.data));
+                for(let i = 0; i < despesasFiltradas.length; i++) {
+                    let despesa = despesasFiltradas[i];
                     html += `<tr>
                                 <td>${new Date(despesa.data).toLocaleDateString('pt-BR')}</td>
                                 <td>${despesa.descricao}</td>
                                 <td>${despesa.categoria}</td>
                                 <td style="color:#dc3545; font-weight:bold;">- R$ ${despesa.valor.toFixed(2)}</td>
+                                <td><button class="btn-excluir" onclick="excluirDespesa(${despesa.id})">🗑️ Excluir</button></td>
                               </tr>`;
-                });
+                }
                 html += '</tbody></table>';
                 despesasDiv.innerHTML = html;
             }
         }
+        
+        function excluirVenda(id) {
+            if(confirm('⚠️ Tem certeza que deseja EXCLUIR esta venda? Esta ação não pode ser desfeita!')) {
+                let vendas = JSON.parse(localStorage.getItem('vendas')) || [];
+                let vendaExcluida = null;
+                for(let i = 0; i < vendas.length; i++) {
+                    if(vendas[i].id === id) {
+                        vendaExcluida = vendas[i];
+                        break;
+                    }
+                }
+                
+                if(vendaExcluida) {
+                    let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
+                    for(let i = 0; i < vendaExcluida.itens.length; i++) {
+                        let item = vendaExcluida.itens[i];
+                        for(let j = 0; j < produtos.length; j++) {
+                            if(produtos[j].nome === item.nome) {
+                                produtos[j].estoque += 1;
+                                break;
+                            }
+                        }
+                    }
+                    salvarProdutosFirebase(produtos);
+                    excluirVendaFirebase(id);
+                    alert('✅ Venda excluída e estoque restaurado!');
+                    gerarRelatorio(periodoAtual);
+                }
+            }
+        }
+        
+        function excluirDespesa(id) {
+            if(confirm('⚠️ Tem certeza que deseja EXCLUIR esta despesa?')) {
+                excluirDespesaFirebase(id);
+                alert('✅ Despesa excluída!');
+                gerarRelatorio(periodoAtual);
+            }
+        }
+        
+        window.carregarVendasRelatorio = () => gerarRelatorio(periodoAtual);
         
         gerarRelatorio('semana');
     </script>

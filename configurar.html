@@ -5,22 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Configurar - Cantina do Danilson</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </head>
 <body>
     <div class="container" style="max-width: 600px; margin: 50px auto;">
         <div class="form-box">
             <h1>🍔 Configurar Cantina do Danilson</h1>
+            <p style="color: #28a745; margin-bottom: 15px;">🔄 Sincronizado com a nuvem (Firebase)</p>
             
-            <button onclick="configurarDadosIniciais()" style="width:100%; margin:10px 0; background:#28a745; padding:15px; font-size:16px;">
+            <button onclick="configurarDadosIniciais()" style="width:100%; margin:10px 0; background:#28a745; padding:15px; font-size:16px; border:none; border-radius:8px; cursor:pointer; color:white;">
                 🔧 Carregar Dados Iniciais
             </button>
             
-            <button onclick="limparTudo()" style="width:100%; margin:10px 0; background:#dc3545; padding:15px; font-size:16px;">
+            <button onclick="limparTudo()" style="width:100%; margin:10px 0; background:#dc3545; padding:15px; font-size:16px; border:none; border-radius:8px; cursor:pointer; color:white;">
                 🗑️ Limpar Todos os Dados
             </button>
             
-            <button onclick="verDados()" style="width:100%; margin:10px 0; background:#007bff; padding:15px; font-size:16px;">
+            <button onclick="verDados()" style="width:100%; margin:10px 0; background:#007bff; padding:15px; font-size:16px; border:none; border-radius:8px; cursor:pointer; color:white;">
                 👁️ Ver Dados Salvos
+            </button>
+            
+            <button onclick="sincronizarFirebase()" style="width:100%; margin:10px 0; background:#17a2b8; padding:15px; font-size:16px; border:none; border-radius:8px; cursor:pointer; color:white;">
+                🔄 Sincronizar com Firebase
             </button>
             
             <hr style="margin: 20px 0;">
@@ -35,7 +43,9 @@
             </ul>
             
             <p style="margin-top: 20px; text-align: center;">
-                <a href="index.html" style="color:#667eea; font-size:18px;">➡️ Ir para o Login</a>
+                <a href="index.html" style="color:#667eea; font-size:18px;">➡️ Ir para a Loja</a>
+                &nbsp;|&nbsp;
+                <a href="admin/index.html" style="color:#667eea; font-size:18px;">🔒 Ir para o Admin</a>
             </p>
         </div>
     </div>
@@ -44,6 +54,20 @@
     </div>
 
     <script>
+        // Configuração do Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyAW21_cocni8lZTfPqEJTem4itJkvMTIMQ",
+            authDomain: "cantina-19288.firebaseapp.com",
+            projectId: "cantina-19288",
+            storageBucket: "cantina-19288.firebasestorage.app",
+            messagingSenderId: "100483187826",
+            appId: "1:100483187826:web:7d4575eeee546539e76eeb"
+        };
+        
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        
         function mostrarMensagem(msg, cor) {
             let div = document.getElementById('mensagem');
             div.innerHTML = msg;
@@ -55,16 +79,21 @@
         }
         
         function configurarDadosIniciais() {
-            // Produtos iniciais
+            // Produtos iniciais com ID único
             let produtos = [
-                { nome: "Coxinha", preco: 5.00, estoque: 20 },
-                { nome: "Refrigerante", preco: 4.00, estoque: 30 },
-                { nome: "Brigadeiro", preco: 2.00, estoque: 50 },
-                { nome: "Pastel", preco: 6.00, estoque: 15 },
-                { nome: "Suco Natural", preco: 5.00, estoque: 10 }
+                { id: Date.now() + 1, nome: "Coxinha", preco: 5.00, estoque: 20, categoria: "Salgados" },
+                { id: Date.now() + 2, nome: "Refrigerante", preco: 4.00, estoque: 30, categoria: "Bebidas" },
+                { id: Date.now() + 3, nome: "Brigadeiro", preco: 2.00, estoque: 50, categoria: "Doces" },
+                { id: Date.now() + 4, nome: "Pastel", preco: 6.00, estoque: 15, categoria: "Salgados" },
+                { id: Date.now() + 5, nome: "Suco Natural", preco: 5.00, estoque: 10, categoria: "Bebidas" }
             ];
             
-            localStorage.setItem('produtos', JSON.stringify(produtos));
+            // Categorias iniciais
+            let categorias = [
+                { id: Date.now() + 10, nome: "Salgados" },
+                { id: Date.now() + 11, nome: "Bebidas" },
+                { id: Date.now() + 12, nome: "Doces" }
+            ];
             
             // Vendas iniciais (exemplo)
             let hoje = new Date();
@@ -72,15 +101,31 @@
             ontem.setDate(hoje.getDate() - 1);
             
             let vendas = [
-                { data: hoje.toISOString(), produto: "Coxinha", total: 5.00 },
-                { data: hoje.toISOString(), produto: "Refrigerante", total: 4.00 },
-                { data: ontem.toISOString(), produto: "Pastel", total: 6.00 },
-                { data: ontem.toISOString(), produto: "Brigadeiro", total: 2.00 }
+                { id: Date.now() + 20, data: hoje.toISOString(), itens: [{ nome: "Coxinha", preco: 5.00 }], total: 5.00 },
+                { id: Date.now() + 21, data: hoje.toISOString(), itens: [{ nome: "Refrigerante", preco: 4.00 }], total: 4.00 },
+                { id: Date.now() + 22, data: ontem.toISOString(), itens: [{ nome: "Pastel", preco: 6.00 }], total: 6.00 },
+                { id: Date.now() + 23, data: ontem.toISOString(), itens: [{ nome: "Brigadeiro", preco: 2.00 }], total: 2.00 }
             ];
             
-            localStorage.setItem('vendas', JSON.stringify(vendas));
+            // Despesas iniciais (opcional)
+            let despesas = [
+                { id: Date.now() + 30, data: new Date().toISOString().split('T')[0], descricao: "Compra de ingredientes", valor: 150.00, categoria: "Ingredientes" },
+                { id: Date.now() + 31, data: new Date().toISOString().split('T')[0], descricao: "Energia elétrica", valor: 80.00, categoria: "Energia/Água" }
+            ];
             
-            mostrarMensagem('✅ Dados configurados com sucesso! Faça login com senha: 123', '#28a745');
+            // Salvar no Firebase
+            database.ref('produtos').set(produtos);
+            database.ref('categorias').set(categorias);
+            database.ref('vendas').set(vendas);
+            database.ref('despesas').set(despesas);
+            
+            // Salvar também no localStorage
+            localStorage.setItem('produtos', JSON.stringify(produtos));
+            localStorage.setItem('categorias', JSON.stringify(categorias));
+            localStorage.setItem('vendas', JSON.stringify(vendas));
+            localStorage.setItem('despesas', JSON.stringify(despesas));
+            
+            mostrarMensagem('✅ Dados configurados com sucesso na nuvem!', '#28a745');
             
             setTimeout(() => {
                 window.location.href = 'index.html';
@@ -88,9 +133,18 @@
         }
         
         function limparTudo() {
-            if(confirm('⚠️ TEM CERTEZA? Isso vai apagar TODOS os produtos e vendas cadastrados!')) {
+            if(confirm('⚠️ TEM CERTEZA? Isso vai apagar TODOS os dados do Firebase e do seu dispositivo!')) {
+                // Limpar Firebase
+                database.ref('produtos').set([]);
+                database.ref('categorias').set([]);
+                database.ref('vendas').set([]);
+                database.ref('despesas').set([]);
+                
+                // Limpar localStorage
                 localStorage.clear();
-                mostrarMensagem('🗑️ Todos os dados foram apagados!', '#dc3545');
+                
+                mostrarMensagem('🗑️ Todos os dados foram apagados da nuvem e do dispositivo!', '#dc3545');
+                
                 setTimeout(() => {
                     window.location.href = 'index.html';
                 }, 2000);
@@ -99,23 +153,70 @@
         
         function verDados() {
             let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
+            let categorias = JSON.parse(localStorage.getItem('categorias')) || [];
             let vendas = JSON.parse(localStorage.getItem('vendas')) || [];
+            let despesas = JSON.parse(localStorage.getItem('despesas')) || [];
+            
+            let totalVendas = 0;
+            for(let i = 0; i < vendas.length; i++) {
+                totalVendas += vendas[i].total;
+            }
+            
+            let totalDespesas = 0;
+            for(let i = 0; i < despesas.length; i++) {
+                totalDespesas += despesas[i].valor;
+            }
+            
+            let lucro = totalVendas - totalDespesas;
             
             let msg = `📦 PRODUTOS: ${produtos.length} cadastrados\n`;
-            msg += `💰 VENDAS: ${vendas.length} registradas\n\n`;
+            msg += `🏷️ CATEGORIAS: ${categorias.length} cadastradas\n`;
+            msg += `💰 VENDAS: ${vendas.length} registradas\n`;
+            msg += `💸 DESPESAS: ${despesas.length} registradas\n\n`;
+            msg += `📊 Total em vendas: R$ ${totalVendas.toFixed(2)}\n`;
+            msg += `📉 Total em despesas: R$ ${totalDespesas.toFixed(2)}\n`;
+            msg += `📈 Lucro total: R$ ${lucro.toFixed(2)}\n\n`;
             msg += `📋 Produtos:\n`;
             
             if(produtos.length === 0) {
                 msg += `(nenhum produto cadastrado)\n`;
             } else {
-                produtos.forEach(p => {
-                    msg += `- ${p.nome}: R$ ${p.preco} (${p.estoque} un)\n`;
-                });
+                for(let i = 0; i < produtos.length; i++) {
+                    msg += `- ${produtos[i].nome}: R$ ${produtos[i].preco} (${produtos[i].estoque} un)\n`;
+                }
             }
             
-            msg += `\n📊 Total em vendas: R$ ${vendas.reduce((sum, v) => sum + v.total, 0).toFixed(2)}`;
-            
             alert(msg);
+        }
+        
+        function sincronizarFirebase() {
+            mostrarMensagem('🔄 Sincronizando dados com a nuvem...', '#17a2b8');
+            
+            // Buscar dados do Firebase e atualizar localStorage
+            database.ref('produtos').once('value', (snapshot) => {
+                if(snapshot.exists()) {
+                    localStorage.setItem('produtos', JSON.stringify(snapshot.val()));
+                }
+            });
+            
+            database.ref('categorias').once('value', (snapshot) => {
+                if(snapshot.exists()) {
+                    localStorage.setItem('categorias', JSON.stringify(snapshot.val()));
+                }
+            });
+            
+            database.ref('vendas').once('value', (snapshot) => {
+                if(snapshot.exists()) {
+                    localStorage.setItem('vendas', JSON.stringify(snapshot.val()));
+                }
+            });
+            
+            database.ref('despesas').once('value', (snapshot) => {
+                if(snapshot.exists()) {
+                    localStorage.setItem('despesas', JSON.stringify(snapshot.val()));
+                }
+                mostrarMensagem('✅ Sincronização concluída! Dados atualizados da nuvem.', '#28a745');
+            });
         }
     </script>
 </body>

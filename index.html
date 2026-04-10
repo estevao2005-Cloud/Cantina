@@ -5,12 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cantina do Danilson - Vendas</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </head>
 <body>
     <div class="tela-venda">
         <div class="header-loja">
             <h1>🍔 Cantina do Danilson</h1>
             <p>Sistema de Vendas</p>
+            <small style="display: block; margin-top: 5px;">🔄 Sincronizado com a nuvem</small>
         </div>
 
         <div class="info-dia">
@@ -18,15 +22,16 @@
             <div class="vendas-dia">Vendas hoje: <strong id="vendasHojeValor">R$ 0,00</strong></div>
         </div>
 
-        <!-- Filtro por categoria -->
-        <div class="filtro-categoria" id="filtroCategoria"></div>
-
-        <!-- Produtos -->
-        <div class="produtos-grid" id="produtosGrid">
-            <p class="sem-produtos">⚠️ Nenhum produto cadastrado. Aguarde o dono adicionar os produtos no painel admin.</p>
+        <div class="status-online" style="background: #28a745; color: white; padding: 5px 10px; border-radius: 5px; text-align: center; margin-bottom: 10px; font-size: 12px;">
+            ✅ Conectado à nuvem - Dados sincronizados em tempo real
         </div>
 
-        <!-- Carrinho -->
+        <div class="filtro-categoria" id="filtroCategoria"></div>
+
+        <div class="produtos-grid" id="produtosGrid">
+            <p class="sem-produtos">⚠️ Carregando produtos...</p>
+        </div>
+
         <div class="carrinho-area">
             <h3>🛒 Carrinho de Compras</h3>
             <div id="carrinhoLista"></div>
@@ -38,6 +43,7 @@
 
     <a href="admin/index.html" class="admin-link">🔒 Painel Admin</a>
 
+    <script src="firebase-config.js"></script>
     <script>
         let carrinho = [];
         let categoriaFiltro = 'todas';
@@ -50,12 +56,16 @@
         function atualizarVendasHoje() {
             let vendas = JSON.parse(localStorage.getItem('vendas')) || [];
             let hoje = new Date().toDateString();
-            let vendasHoje = vendas.filter(v => new Date(v.data).toDateString() === hoje);
-            let totalHoje = vendasHoje.reduce((sum, v) => sum + v.total, 0);
+            let totalHoje = 0;
+            for(let i = 0; i < vendas.length; i++) {
+                if(new Date(vendas[i].data).toDateString() === hoje) {
+                    totalHoje += vendas[i].total;
+                }
+            }
             document.getElementById('vendasHojeValor').innerHTML = `R$ ${totalHoje.toFixed(2)}`;
         }
 
-        function carregarCategorias() {
+        function carregarCategoriasFirebase() {
             let categorias = JSON.parse(localStorage.getItem('categorias')) || [];
             let filtroDiv = document.getElementById('filtroCategoria');
             
@@ -65,33 +75,28 @@
             }
             
             let html = '<button class="btn-categoria" onclick="filtrarPorCategoria(\'todas\')">📦 Todas</button>';
-            categorias.forEach(cat => {
-                html += `<button class="btn-categoria" onclick="filtrarPorCategoria('${cat.nome}')">${cat.nome}</button>`;
-            });
+            for(let i = 0; i < categorias.length; i++) {
+                html += `<button class="btn-categoria" onclick="filtrarPorCategoria('${categorias[i].nome}')">${categorias[i].nome}</button>`;
+            }
             filtroDiv.innerHTML = html;
         }
 
         function filtrarPorCategoria(categoria) {
             categoriaFiltro = categoria;
-            carregarProdutos();
+            carregarProdutosFirebase();
             
             let botoes = document.querySelectorAll('.btn-categoria');
-            botoes.forEach(btn => {
-                btn.style.background = '#e0e0e0';
-                btn.style.color = '#333';
-            });
-            
-            // Encontrar o botão clicado
             for(let i = 0; i < botoes.length; i++) {
+                botoes[i].style.background = '#e0e0e0';
+                botoes[i].style.color = '#333';
                 if(botoes[i].innerText.includes(categoria)) {
                     botoes[i].style.background = '#667eea';
                     botoes[i].style.color = 'white';
-                    break;
                 }
             }
         }
 
-        function carregarProdutos() {
+        function carregarProdutosFirebase() {
             let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
             let grid = document.getElementById('produtosGrid');
             
@@ -102,7 +107,12 @@
             
             let produtosFiltrados = produtos;
             if(categoriaFiltro !== 'todas') {
-                produtosFiltrados = produtos.filter(p => p.categoria === categoriaFiltro);
+                produtosFiltrados = [];
+                for(let i = 0; i < produtos.length; i++) {
+                    if(produtos[i].categoria === categoriaFiltro) {
+                        produtosFiltrados.push(produtos[i]);
+                    }
+                }
             }
             
             if(produtosFiltrados.length === 0) {
@@ -113,13 +123,12 @@
             grid.innerHTML = '';
             for(let i = 0; i < produtosFiltrados.length; i++) {
                 let produto = produtosFiltrados[i];
-                let produtoOriginalIndex = produtos.findIndex(p => p.id === produto.id);
                 if(produto.estoque > 0) {
                     let card = document.createElement('div');
                     card.className = 'produto-card';
-                    card.onclick = (function(idx) { 
-                        return function() { adicionarAoCarrinho(idx); };
-                    })(produtoOriginalIndex);
+                    card.onclick = (function(p) { 
+                        return function() { adicionarAoCarrinho(p.id); };
+                    })(produto);
                     card.innerHTML = `
                         <div class="produto-nome">${produto.nome}</div>
                         <div class="produto-preco">R$ ${produto.preco.toFixed(2)}</div>
@@ -131,20 +140,29 @@
             }
         }
 
-        function adicionarAoCarrinho(index) {
-            let produtos = JSON.parse(localStorage.getItem('produtos'));
-            let produto = produtos[index];
+        function adicionarAoCarrinho(produtoId) {
+            let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
+            let produto = null;
+            let produtoIndex = -1;
             
-            if(produto.estoque <= 0) {
+            for(let i = 0; i < produtos.length; i++) {
+                if(produtos[i].id === produtoId) {
+                    produto = produtos[i];
+                    produtoIndex = i;
+                    break;
+                }
+            }
+            
+            if(!produto || produto.estoque <= 0) {
                 alert('⚠️ Produto sem estoque!');
                 return;
             }
             
             carrinho.push({
-                id: index,
+                id: produtoIndex,
+                produtoId: produto.id,
                 nome: produto.nome,
-                preco: produto.preco,
-                produtoId: produto.id
+                preco: produto.preco
             });
             
             atualizarCarrinho();
@@ -162,12 +180,11 @@
             
             lista.innerHTML = '';
             for(let i = 0; i < carrinho.length; i++) {
-                let item = carrinho[i];
-                total += item.preco;
+                total += carrinho[i].preco;
                 let div = document.createElement('div');
                 div.className = 'carrinho-item';
                 div.innerHTML = `
-                    <span><strong>${item.nome}</strong> - R$ ${item.preco.toFixed(2)}</span>
+                    <span><strong>${carrinho[i].nome}</strong> - R$ ${carrinho[i].preco.toFixed(2)}</span>
                     <button class="btn-remover" onclick="removerDoCarrinho(${i})">❌</button>
                 `;
                 lista.appendChild(div);
@@ -194,46 +211,51 @@
                 return;
             }
             
-            let produtos = JSON.parse(localStorage.getItem('produtos'));
-            let vendas = JSON.parse(localStorage.getItem('vendas')) || [];
+            let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
             let total = 0;
+            let itensVendidos = [];
             
             for(let i = 0; i < carrinho.length; i++) {
                 total += carrinho[i].preco;
+                itensVendidos.push({ nome: carrinho[i].nome, preco: carrinho[i].preco });
+                produtos[carrinho[i].id].estoque -= 1;
             }
             
             let vendaRegistro = {
                 id: Date.now(),
                 data: new Date().toISOString(),
-                itens: [],
+                itens: itensVendidos,
                 total: total
             };
             
-            for(let i = 0; i < carrinho.length; i++) {
-                let item = carrinho[i];
-                vendaRegistro.itens.push({ nome: item.nome, preco: item.preco });
-                produtos[item.id].estoque -= 1;
+            // Salvar no Firebase
+            if(typeof salvarVendaFirebase === 'function') {
+                salvarVendaFirebase(vendaRegistro);
+                salvarProdutosFirebase(produtos);
+                alert(`✅ Venda finalizada!\n💰 Total: R$ ${total.toFixed(2)}\n🔄 Sincronizando com a nuvem...`);
+            } else {
+                alert(`✅ Venda finalizada!\n💰 Total: R$ ${total.toFixed(2)}`);
             }
-            
-            vendas.push(vendaRegistro);
-            
-            localStorage.setItem('produtos', JSON.stringify(produtos));
-            localStorage.setItem('vendas', JSON.stringify(vendas));
-            
-            alert(`✅ Venda finalizada!\n💰 Total: R$ ${total.toFixed(2)}`);
             
             carrinho = [];
             atualizarCarrinho();
-            carregarProdutos();
-            atualizarVendasHoje();
         }
         
-        atualizarData();
-        atualizarVendasHoje();
-        carregarCategorias();
-        carregarProdutos();
+        // Sobrescrever funções do firebase-config para atualizar a tela
+        window.carregarProdutos = carregarProdutosFirebase;
+        window.atualizarVendasHoje = atualizarVendasHoje;
+        window.carregarCategorias = carregarCategoriasFirebase;
         
-        setInterval(atualizarVendasHoje, 5000);
+        atualizarData();
+        carregarCategoriasFirebase();
+        carregarProdutosFirebase();
+        atualizarVendasHoje();
+        
+        // Atualizar a cada 2 segundos
+        setInterval(() => {
+            carregarProdutosFirebase();
+            atualizarVendasHoje();
+        }, 2000);
     </script>
 </body>
 </html>

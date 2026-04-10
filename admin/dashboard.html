@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - Admin Cantina</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </head>
 <body>
     <div class="admin-container">
@@ -25,18 +28,25 @@
             <h1>Dashboard</h1>
             <p>Bem-vindo, <strong>Danilson</strong>! Aqui está o resumo da sua cantina.</p>
             
+            <div class="status-online" style="background: #28a745; color: white; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
+                ✅ Conectado à nuvem - Dados sincronizados em tempo real com o sistema dos funcionários
+            </div>
+            
             <div class="cards-admin">
                 <div class="card-admin">
                     <h3>💰 Vendas Hoje</h3>
                     <p class="valor-grande" id="vendasHoje">R$ 0,00</p>
+                    <small>📅 Vendas do dia atual</small>
                 </div>
                 <div class="card-admin">
                     <h3>📊 Vendas Semana</h3>
                     <p class="valor-grande" id="vendasSemana">R$ 0,00</p>
+                    <small id="statusSemana">⏳ Aguardando fim da semana</small>
                 </div>
                 <div class="card-admin">
                     <h3>📅 Vendas Mês</h3>
                     <p class="valor-grande" id="vendasMes">R$ 0,00</p>
+                    <small id="statusMes">⏳ Aguardando fim do mês</small>
                 </div>
             </div>
             
@@ -44,14 +54,17 @@
                 <div class="card-admin despesa">
                     <h3>💸 Despesas Mês</h3>
                     <p class="valor-grande" id="despesasMes">R$ 0,00</p>
+                    <small>💰 Despesas acumuladas no mês</small>
                 </div>
                 <div class="card-admin lucro">
                     <h3>💰 Lucro Mês</h3>
                     <p class="valor-grande" id="lucroMes">R$ 0,00</p>
+                    <small id="statusLucro">⏳ Só será calculado no fim do mês</small>
                 </div>
                 <div class="card-admin">
                     <h3>📦 Total Produtos</h3>
                     <p class="valor-grande" id="totalProdutos">0</p>
+                    <small>Produtos cadastrados</small>
                 </div>
             </div>
             
@@ -61,12 +74,13 @@
             </div>
             
             <div class="ultimas-vendas" style="margin-top: 30px;">
-                <h3>📋 Últimas Vendas (últimas 10)</h3>
+                <h3>📋 Últimas Vendas (em tempo real)</h3>
                 <div id="ultimasVendas"></div>
             </div>
         </div>
     </div>
 
+    <script src="../firebase-config.js"></script>
     <script>
         function logout() {
             localStorage.removeItem('admin_logado');
@@ -77,129 +91,147 @@
             window.location.href = 'index.html';
         }
         
-        function calcularVendas() {
+        function isUltimoDiaDaSemana() {
+            let hoje = new Date();
+            return hoje.getDay() === 0;
+        }
+        
+        function isUltimoDiaDoMes() {
+            let hoje = new Date();
+            let amanha = new Date(hoje);
+            amanha.setDate(hoje.getDate() + 1);
+            return amanha.getMonth() !== hoje.getMonth();
+        }
+        
+        function atualizarDashboard() {
             let vendas = JSON.parse(localStorage.getItem('vendas')) || [];
+            let despesas = JSON.parse(localStorage.getItem('despesas')) || [];
+            let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
             let hoje = new Date();
             let inicioSemana = new Date();
             inicioSemana.setDate(hoje.getDate() - hoje.getDay());
             let inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
             
+            // Calcular vendas
             let vendasHoje = 0, vendasSemana = 0, vendasMes = 0;
-            
-            vendas.forEach(venda => {
-                let dataVenda = new Date(venda.data);
-                if(dataVenda.toDateString() === hoje.toDateString()) vendasHoje += venda.total;
-                if(dataVenda >= inicioSemana) vendasSemana += venda.total;
-                if(dataVenda >= inicioMes) vendasMes += venda.total;
-            });
+            for(let i = 0; i < vendas.length; i++) {
+                let dataVenda = new Date(vendas[i].data);
+                if(dataVenda.toDateString() === hoje.toDateString()) vendasHoje += vendas[i].total;
+                if(dataVenda >= inicioSemana) vendasSemana += vendas[i].total;
+                if(dataVenda >= inicioMes) vendasMes += vendas[i].total;
+            }
             
             document.getElementById('vendasHoje').innerHTML = `R$ ${vendasHoje.toFixed(2)}`;
-            document.getElementById('vendasSemana').innerHTML = `R$ ${vendasSemana.toFixed(2)}`;
-            document.getElementById('vendasMes').innerHTML = `R$ ${vendasMes.toFixed(2)}`;
-            return vendasMes;
-        }
-        
-        function calcularDespesas() {
-            let despesas = JSON.parse(localStorage.getItem('despesas')) || [];
-            let hoje = new Date();
-            let inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
             
-            let despesasMes = despesas.filter(d => new Date(d.data) >= inicioMes).reduce((sum, d) => sum + d.valor, 0);
+            let statusSemana = document.getElementById('statusSemana');
+            let vendasSemanaElem = document.getElementById('vendasSemana');
+            
+            if(isUltimoDiaDaSemana()) {
+                vendasSemanaElem.innerHTML = `R$ ${vendasSemana.toFixed(2)}`;
+                statusSemana.innerHTML = '✅ Semana finalizada! Total da semana';
+                statusSemana.style.color = '#28a745';
+            } else {
+                let diasFaltam = 7 - hoje.getDay();
+                vendasSemanaElem.innerHTML = `R$ ${vendasSemana.toFixed(2)} (parcial)`;
+                statusSemana.innerHTML = `⏳ Aguardando fim da semana (faltam ${diasFaltam} dias)`;
+                statusSemana.style.color = '#ffc107';
+            }
+            
+            let statusMes = document.getElementById('statusMes');
+            let vendasMesElem = document.getElementById('vendasMes');
+            
+            if(isUltimoDiaDoMes()) {
+                vendasMesElem.innerHTML = `R$ ${vendasMes.toFixed(2)}`;
+                statusMes.innerHTML = '✅ Mês finalizado! Total do mês';
+                statusMes.style.color = '#28a745';
+            } else {
+                let diasFaltam = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate() - hoje.getDate();
+                vendasMesElem.innerHTML = `R$ ${vendasMes.toFixed(2)} (parcial)`;
+                statusMes.innerHTML = `⏳ Aguardando fim do mês (faltam ${diasFaltam} dias)`;
+                statusMes.style.color = '#ffc107';
+            }
+            
+            // Calcular despesas do mês
+            let despesasMes = 0;
+            for(let i = 0; i < despesas.length; i++) {
+                if(new Date(despesas[i].data) >= inicioMes) {
+                    despesasMes += despesas[i].valor;
+                }
+            }
             document.getElementById('despesasMes').innerHTML = `R$ ${despesasMes.toFixed(2)}`;
-            return despesasMes;
-        }
-        
-        function calcularLucro() {
-            let vendasMes = parseFloat(document.getElementById('vendasMes').innerHTML.replace('R$ ', '').replace(',', '.'));
-            let despesasMes = parseFloat(document.getElementById('despesasMes').innerHTML.replace('R$ ', '').replace(',', '.'));
+            
+            // Calcular lucro
             let lucro = vendasMes - despesasMes;
-            document.getElementById('lucroMes').innerHTML = `R$ ${lucro.toFixed(2)}`;
-            document.getElementById('lucroMes').style.color = lucro >= 0 ? '#28a745' : '#dc3545';
-        }
-        
-        function carregarProdutos() {
-            let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
+            let lucroElem = document.getElementById('lucroMes');
+            let statusLucro = document.getElementById('statusLucro');
+            
+            if(isUltimoDiaDoMes()) {
+                lucroElem.innerHTML = `R$ ${lucro.toFixed(2)}`;
+                lucroElem.style.color = lucro >= 0 ? '#28a745' : '#dc3545';
+                statusLucro.innerHTML = '✅ Lucro real do mês finalizado';
+                statusLucro.style.color = '#28a745';
+            } else {
+                lucroElem.innerHTML = `R$ ${lucro.toFixed(2)} (parcial)`;
+                lucroElem.style.color = '#ffc107';
+                statusLucro.innerHTML = '⏳ Só será calculado no fim do mês (valor parcial)';
+                statusLucro.style.color = '#ffc107';
+            }
+            
+            // Total de produtos
             document.getElementById('totalProdutos').innerHTML = produtos.length;
             
-            let baixos = produtos.filter(p => p.estoque <= 5);
-            let alertaDiv = document.getElementById('alertasEstoque');
+            // Alertas de estoque baixo
+            let baixos = [];
+            for(let i = 0; i < produtos.length; i++) {
+                if(produtos[i].estoque <= 5) {
+                    baixos.push(produtos[i]);
+                }
+            }
             
+            let alertaDiv = document.getElementById('alertasEstoque');
             if(produtos.length === 0) {
                 alertaDiv.innerHTML = '<p>📦 Nenhum produto cadastrado ainda. Vá em "Produtos" para adicionar.</p>';
             } else if(baixos.length === 0) {
                 alertaDiv.innerHTML = '<p>✅ Todos os produtos com estoque OK!</p>';
             } else {
                 let html = '<ul>';
-                baixos.forEach(p => {
-                    html += `<li>⚠️ ${p.nome} - Estoque: ${p.estoque} unidades</li>`;
-                });
+                for(let i = 0; i < baixos.length; i++) {
+                    html += `<li>⚠️ ${baixos[i].nome} - Estoque: ${baixos[i].estoque} unidades</li>`;
+                }
                 html += '</ul>';
                 alertaDiv.innerHTML = html;
             }
-        }
-        
-        function carregarUltimasVendas() {
-            let vendas = JSON.parse(localStorage.getItem('vendas')) || [];
+            
+            // Últimas vendas
             let ultimasVendas = vendas.slice(-10).reverse();
-            let div = document.getElementById('ultimasVendas');
+            let vendasDiv = document.getElementById('ultimasVendas');
             
             if(ultimasVendas.length === 0) {
-                div.innerHTML = '<div class="vazio">📭 Nenhuma venda registrada ainda</div>';
+                vendasDiv.innerHTML = '<div class="vazio">📭 Nenhuma venda registrada ainda</div>';
                 return;
             }
             
-            let html = '<table class="tabela-admin"><thead><tr><th>Data</th><th>Itens</th><th>Total</th><th>Ação</th></tr></thead><tbody>';
-            
-            ultimasVendas.forEach(venda => {
-                let itensTexto = venda.itens.map(i => i.nome).join(', ');
+            let html = '<table class="tabela-admin"><thead><tr><th>Data</th><th>Itens</th><th>Total</th></tr></thead><tbody>';
+            for(let i = 0; i < ultimasVendas.length; i++) {
+                let venda = ultimasVendas[i];
+                let itensTexto = '';
+                for(let j = 0; j < venda.itens.length; j++) {
+                    if(j > 0) itensTexto += ', ';
+                    itensTexto += venda.itens[j].nome;
+                }
                 html += `<tr>
                             <td>${new Date(venda.data).toLocaleDateString('pt-BR')} ${new Date(venda.data).toLocaleTimeString()}</td>
                             <td>${itensTexto}</td>
                             <td style="color:#28a745; font-weight:bold;">R$ ${venda.total.toFixed(2)}</td>
-                            <td><button class="btn-excluir" onclick="excluirVenda(${venda.id})">🗑️ Excluir</button></td>
                           </tr>`;
-            });
-            
-            html += '</tbody></table>';
-            div.innerHTML = html;
-        }
-        
-        function excluirVenda(id) {
-            if(confirm('⚠️ Tem certeza que deseja EXCLUIR esta venda? Esta ação não pode ser desfeita!')) {
-                let vendas = JSON.parse(localStorage.getItem('vendas')) || [];
-                let vendaExcluida = vendas.find(v => v.id === id);
-                
-                if(vendaExcluida) {
-                    // Restaurar o estoque dos produtos vendidos
-                    let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
-                    vendaExcluida.itens.forEach(item => {
-                        let produto = produtos.find(p => p.nome === item.nome);
-                        if(produto) {
-                            produto.estoque += 1;
-                        }
-                    });
-                    localStorage.setItem('produtos', JSON.stringify(produtos));
-                    
-                    // Remover a venda
-                    vendas = vendas.filter(v => v.id !== id);
-                    localStorage.setItem('vendas', JSON.stringify(vendas));
-                    
-                    alert('✅ Venda excluída e estoque restaurado!');
-                    
-                    // Recarregar todos os dados
-                    calcularVendas();
-                    calcularLucro();
-                    carregarProdutos();
-                    carregarUltimasVendas();
-                }
             }
+            html += '</tbody></table>';
+            vendasDiv.innerHTML = html;
         }
         
-        calcularVendas();
-        calcularDespesas();
-        calcularLucro();
-        carregarProdutos();
-        carregarUltimasVendas();
+        // Atualizar a cada 2 segundos
+        atualizarDashboard();
+        setInterval(atualizarDashboard, 2000);
     </script>
 </body>
 </html>
