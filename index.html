@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cantina do Danilson - Vendas</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Firebase SDK -->
+    <!-- Firebase SDK - Versão compatível -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </head>
@@ -22,8 +22,8 @@
             <div class="vendas-dia">Vendas hoje: <strong id="vendasHojeValor">R$ 0,00</strong></div>
         </div>
 
-        <div class="status-online" style="background: #28a745; color: white; padding: 5px 10px; border-radius: 5px; text-align: center; margin-bottom: 10px; font-size: 12px;">
-            ✅ Conectado à nuvem - Dados sincronizados em tempo real
+        <div class="status-online" id="statusOnline" style="background: #ffc107; color: #333; padding: 5px 10px; border-radius: 5px; text-align: center; margin-bottom: 10px; font-size: 12px;">
+            ⏳ Conectando ao Firebase...
         </div>
 
         <div class="filtro-categoria" id="filtroCategoria"></div>
@@ -43,10 +43,41 @@
 
     <a href="admin/index.html" class="admin-link">🔒 Painel Admin</a>
 
-    <script src="firebase-config.js"></script>
     <script>
+        // Configuração do Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyAW21_cocni8lZTfPqEJTem4itJkvMTIMQ",
+            authDomain: "cantina-19288.firebaseapp.com",
+            projectId: "cantina-19288",
+            storageBucket: "cantina-19288.firebasestorage.app",
+            messagingSenderId: "100483187826",
+            appId: "1:100483187826:web:7d4575eeee546539e76eeb",
+            databaseURL: "https://cantina-19288-default-rtdb.firebaseio.com/"  // Adicione esta linha!
+        };
+        
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        
         let carrinho = [];
         let categoriaFiltro = 'todas';
+        let produtosAtuais = [];
+
+        // Testar conexão com Firebase
+        function testarConexao() {
+            const statusDiv = document.getElementById('statusOnline');
+            database.ref('.info/connected').on('value', (snap) => {
+                if(snap.val() === true) {
+                    statusDiv.innerHTML = '✅ Conectado à nuvem - Dados sincronizados';
+                    statusDiv.style.background = '#28a745';
+                    statusDiv.style.color = 'white';
+                } else {
+                    statusDiv.innerHTML = '❌ Sem conexão - Verifique sua internet';
+                    statusDiv.style.background = '#dc3545';
+                    statusDiv.style.color = 'white';
+                }
+            });
+        }
 
         function atualizarData() {
             let data = new Date();
@@ -54,36 +85,44 @@
         }
 
         function atualizarVendasHoje() {
-            let vendas = JSON.parse(localStorage.getItem('vendas')) || [];
-            let hoje = new Date().toDateString();
-            let totalHoje = 0;
-            for(let i = 0; i < vendas.length; i++) {
-                if(new Date(vendas[i].data).toDateString() === hoje) {
-                    totalHoje += vendas[i].total;
+            database.ref('vendas').once('value', (snapshot) => {
+                let vendas = snapshot.val() || [];
+                let hoje = new Date().toDateString();
+                let totalHoje = 0;
+                if(vendas.length > 0) {
+                    for(let i = 0; i < vendas.length; i++) {
+                        if(vendas[i] && new Date(vendas[i].data).toDateString() === hoje) {
+                            totalHoje += vendas[i].total;
+                        }
+                    }
                 }
-            }
-            document.getElementById('vendasHojeValor').innerHTML = `R$ ${totalHoje.toFixed(2)}`;
+                document.getElementById('vendasHojeValor').innerHTML = `R$ ${totalHoje.toFixed(2)}`;
+            });
         }
 
-        function carregarCategoriasFirebase() {
-            let categorias = JSON.parse(localStorage.getItem('categorias')) || [];
-            let filtroDiv = document.getElementById('filtroCategoria');
-            
-            if(categorias.length === 0) {
-                filtroDiv.innerHTML = '';
-                return;
-            }
-            
-            let html = '<button class="btn-categoria" onclick="filtrarPorCategoria(\'todas\')">📦 Todas</button>';
-            for(let i = 0; i < categorias.length; i++) {
-                html += `<button class="btn-categoria" onclick="filtrarPorCategoria('${categorias[i].nome}')">${categorias[i].nome}</button>`;
-            }
-            filtroDiv.innerHTML = html;
+        function carregarCategorias() {
+            database.ref('categorias').once('value', (snapshot) => {
+                let categorias = snapshot.val() || [];
+                let filtroDiv = document.getElementById('filtroCategoria');
+                
+                if(categorias.length === 0) {
+                    filtroDiv.innerHTML = '';
+                    return;
+                }
+                
+                let html = '<button class="btn-categoria" onclick="filtrarPorCategoria(\'todas\')">📦 Todas</button>';
+                for(let i = 0; i < categorias.length; i++) {
+                    if(categorias[i] && categorias[i].nome) {
+                        html += `<button class="btn-categoria" onclick="filtrarPorCategoria('${categorias[i].nome}')">${categorias[i].nome}</button>`;
+                    }
+                }
+                filtroDiv.innerHTML = html;
+            });
         }
 
         function filtrarPorCategoria(categoria) {
             categoriaFiltro = categoria;
-            carregarProdutosFirebase();
+            carregarProdutos();
             
             let botoes = document.querySelectorAll('.btn-categoria');
             for(let i = 0; i < botoes.length; i++) {
@@ -96,59 +135,58 @@
             }
         }
 
-        function carregarProdutosFirebase() {
-            let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
-            let grid = document.getElementById('produtosGrid');
-            
-            if(produtos.length === 0) {
-                grid.innerHTML = '<p class="sem-produtos">⚠️ Nenhum produto cadastrado. Aguarde o dono adicionar os produtos no painel admin.</p>';
-                return;
-            }
-            
-            let produtosFiltrados = produtos;
-            if(categoriaFiltro !== 'todas') {
-                produtosFiltrados = [];
-                for(let i = 0; i < produtos.length; i++) {
-                    if(produtos[i].categoria === categoriaFiltro) {
-                        produtosFiltrados.push(produtos[i]);
+        function carregarProdutos() {
+            database.ref('produtos').once('value', (snapshot) => {
+                let produtos = snapshot.val() || [];
+                produtosAtuais = produtos;
+                let grid = document.getElementById('produtosGrid');
+                
+                if(produtos.length === 0) {
+                    grid.innerHTML = '<p class="sem-produtos">⚠️ Nenhum produto cadastrado. Aguarde o dono adicionar os produtos no painel admin.</p>';
+                    return;
+                }
+                
+                let produtosFiltrados = produtos;
+                if(categoriaFiltro !== 'todas') {
+                    produtosFiltrados = [];
+                    for(let i = 0; i < produtos.length; i++) {
+                        if(produtos[i] && produtos[i].categoria === categoriaFiltro) {
+                            produtosFiltrados.push(produtos[i]);
+                        }
                     }
                 }
-            }
-            
-            if(produtosFiltrados.length === 0) {
-                grid.innerHTML = '<p class="sem-produtos">⚠️ Nenhum produto nesta categoria.</p>';
-                return;
-            }
-            
-            grid.innerHTML = '';
-            for(let i = 0; i < produtosFiltrados.length; i++) {
-                let produto = produtosFiltrados[i];
-                if(produto.estoque > 0) {
-                    let card = document.createElement('div');
-                    card.className = 'produto-card';
-                    card.onclick = (function(p) { 
-                        return function() { adicionarAoCarrinho(p.id); };
-                    })(produto);
-                    card.innerHTML = `
-                        <div class="produto-nome">${produto.nome}</div>
-                        <div class="produto-preco">R$ ${produto.preco.toFixed(2)}</div>
-                        <div class="produto-estoque">📦 Estoque: ${produto.estoque}</div>
-                        <div class="produto-categoria">🏷️ ${produto.categoria || 'Geral'}</div>
-                    `;
-                    grid.appendChild(card);
+                
+                if(produtosFiltrados.length === 0) {
+                    grid.innerHTML = '<p class="sem-produtos">⚠️ Nenhum produto nesta categoria.</p>';
+                    return;
                 }
-            }
+                
+                grid.innerHTML = '';
+                for(let i = 0; i < produtosFiltrados.length; i++) {
+                    let produto = produtosFiltrados[i];
+                    if(produto && produto.estoque > 0) {
+                        let card = document.createElement('div');
+                        card.className = 'produto-card';
+                        card.onclick = (function(p) { 
+                            return function() { adicionarAoCarrinho(p.id); };
+                        })(produto);
+                        card.innerHTML = `
+                            <div class="produto-nome">${produto.nome || 'Produto'}</div>
+                            <div class="produto-preco">R$ ${(produto.preco || 0).toFixed(2)}</div>
+                            <div class="produto-estoque">📦 Estoque: ${produto.estoque || 0}</div>
+                            <div class="produto-categoria">🏷️ ${produto.categoria || 'Geral'}</div>
+                        `;
+                        grid.appendChild(card);
+                    }
+                }
+            });
         }
 
         function adicionarAoCarrinho(produtoId) {
-            let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
             let produto = null;
-            let produtoIndex = -1;
-            
-            for(let i = 0; i < produtos.length; i++) {
-                if(produtos[i].id === produtoId) {
-                    produto = produtos[i];
-                    produtoIndex = i;
+            for(let i = 0; i < produtosAtuais.length; i++) {
+                if(produtosAtuais[i] && produtosAtuais[i].id === produtoId) {
+                    produto = produtosAtuais[i];
                     break;
                 }
             }
@@ -159,7 +197,6 @@
             }
             
             carrinho.push({
-                id: produtoIndex,
                 produtoId: produto.id,
                 nome: produto.nome,
                 preco: produto.preco
@@ -211,51 +248,100 @@
                 return;
             }
             
-            let produtos = JSON.parse(localStorage.getItem('produtos')) || [];
-            let total = 0;
-            let itensVendidos = [];
+            let statusDiv = document.getElementById('statusOnline');
+            statusDiv.innerHTML = '🔄 Processando venda...';
+            statusDiv.style.background = '#ffc107';
+            statusDiv.style.color = '#333';
             
-            for(let i = 0; i < carrinho.length; i++) {
-                total += carrinho[i].preco;
-                itensVendidos.push({ nome: carrinho[i].nome, preco: carrinho[i].preco });
-                produtos[carrinho[i].id].estoque -= 1;
-            }
-            
-            let vendaRegistro = {
-                id: Date.now(),
-                data: new Date().toISOString(),
-                itens: itensVendidos,
-                total: total
-            };
-            
-            // Salvar no Firebase
-            if(typeof salvarVendaFirebase === 'function') {
-                salvarVendaFirebase(vendaRegistro);
-                salvarProdutosFirebase(produtos);
-                alert(`✅ Venda finalizada!\n💰 Total: R$ ${total.toFixed(2)}\n🔄 Sincronizando com a nuvem...`);
-            } else {
-                alert(`✅ Venda finalizada!\n💰 Total: R$ ${total.toFixed(2)}`);
-            }
-            
-            carrinho = [];
-            atualizarCarrinho();
+            // Buscar produtos atuais do Firebase
+            database.ref('produtos').once('value', (snapshot) => {
+                let produtos = snapshot.val() || [];
+                let total = 0;
+                let itensVendidos = [];
+                let produtosAtualizados = [...produtos];
+                
+                // Calcular total e atualizar estoque
+                for(let i = 0; i < carrinho.length; i++) {
+                    let itemCarrinho = carrinho[i];
+                    total += itemCarrinho.preco;
+                    itensVendidos.push({ nome: itemCarrinho.nome, preco: itemCarrinho.preco });
+                    
+                    // Encontrar e atualizar estoque do produto
+                    for(let j = 0; j < produtosAtualizados.length; j++) {
+                        if(produtosAtualizados[j] && produtosAtualizados[j].id === itemCarrinho.produtoId) {
+                            produtosAtualizados[j].estoque -= 1;
+                            break;
+                        }
+                    }
+                }
+                
+                let vendaRegistro = {
+                    id: Date.now(),
+                    data: new Date().toISOString(),
+                    itens: itensVendidos,
+                    total: total
+                };
+                
+                // Buscar vendas atuais e salvar
+                database.ref('vendas').once('value', (vendasSnapshot) => {
+                    let vendas = vendasSnapshot.val() || [];
+                    vendas.push(vendaRegistro);
+                    
+                    // Salvar vendas e produtos atualizados
+                    database.ref('vendas').set(vendas);
+                    database.ref('produtos').set(produtosAtualizados);
+                    
+                    statusDiv.innerHTML = '✅ Venda registrada na nuvem!';
+                    statusDiv.style.background = '#28a745';
+                    statusDiv.style.color = 'white';
+                    
+                    alert(`✅ Venda finalizada!\n💰 Total: R$ ${total.toFixed(2)}\n🔄 Sincronizado com a nuvem!`);
+                    
+                    carrinho = [];
+                    atualizarCarrinho();
+                    carregarProdutos();
+                    atualizarVendasHoje();
+                    
+                    setTimeout(() => {
+                        statusDiv.innerHTML = '✅ Conectado à nuvem - Dados sincronizados';
+                    }, 3000);
+                });
+            }).catch(error => {
+                console.error('Erro ao salvar:', error);
+                statusDiv.innerHTML = '❌ Erro ao salvar venda';
+                statusDiv.style.background = '#dc3545';
+                alert('❌ Erro ao finalizar venda! Tente novamente.');
+                setTimeout(() => {
+                    statusDiv.innerHTML = '✅ Conectado à nuvem - Dados sincronizados';
+                    statusDiv.style.background = '#28a745';
+                }, 3000);
+            });
         }
         
-        // Sobrescrever funções do firebase-config para atualizar a tela
-        window.carregarProdutos = carregarProdutosFirebase;
-        window.atualizarVendasHoje = atualizarVendasHoje;
-        window.carregarCategorias = carregarCategoriasFirebase;
+        // Atualizar dados em tempo real
+        function iniciarEscutaTempoReal() {
+            // Ouvir mudanças nos produtos
+            database.ref('produtos').on('value', () => {
+                carregarProdutos();
+            });
+            
+            // Ouvir mudanças nas vendas
+            database.ref('vendas').on('value', () => {
+                atualizarVendasHoje();
+            });
+            
+            // Ouvir mudanças nas categorias
+            database.ref('categorias').on('value', () => {
+                carregarCategorias();
+            });
+        }
         
         atualizarData();
-        carregarCategoriasFirebase();
-        carregarProdutosFirebase();
+        carregarCategorias();
+        carregarProdutos();
         atualizarVendasHoje();
-        
-        // Atualizar a cada 2 segundos
-        setInterval(() => {
-            carregarProdutosFirebase();
-            atualizarVendasHoje();
-        }, 2000);
+        iniciarEscutaTempoReal();
+        testarConexao();
     </script>
 </body>
 </html>
